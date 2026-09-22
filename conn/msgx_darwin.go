@@ -183,6 +183,12 @@ var sendMsgXPool = sync.Pool{New: func() any {
 // sendMsgX sends msgs with a single syscall, over a connected socket when the
 // bind has one and by addressing every message otherwise.
 func (s *StdNetBind) sendMsgX(conn *net.UDPConn, msgs []ipv6.Message) error {
+	// AmneziaWG header-protection failures nil out every packet in a batch;
+	// RoutineSequentialSender then calls Send with an empty slice. Guard here
+	// so msgs[0] / &buffer[0] cannot panic the whole process.
+	if len(msgs) == 0 {
+		return nil
+	}
 	var (
 		rawConn syscall.RawConn
 		isV6    bool
