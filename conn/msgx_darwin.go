@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/sagernet/sing/common"
 	M "github.com/sagernet/sing/common/metadata"
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sys/unix"
@@ -307,12 +308,15 @@ func (s *StdNetBind) makeReceiveMsgX(conn *net.UDPConn, isV6 bool) (ReceiveFunc,
 			return 0, errno
 		}
 		numMsgs := int(n)
+		// Only strip the reserved field when the reserved-bytes feature is actually
+		// in use. Leaving these bytes intact otherwise keeps AmneziaWG header-
+		// protection nonces (leading S1-S4 crypto padding) and magic headers
+		// readable on the receive path.
+		clearReserved := len(s.reservedForEndpoint) > 0
 		for i := 0; i < numMsgs; i++ {
 			sizes[i] = int(state.hdrs[i].DataLen)
-			if sizes[i] > 3 {
-				bufs[i][1] = 0
-				bufs[i][2] = 0
-				bufs[i][3] = 0
+			if clearReserved && hasReservedField(bufs[i][:sizes[i]]) {
+				common.ClearArray(bufs[i][1:4])
 			}
 			if connectedEndpoint != nil {
 				eps[i] = connectedEndpoint
